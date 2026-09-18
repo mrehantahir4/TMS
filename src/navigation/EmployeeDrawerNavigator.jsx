@@ -34,7 +34,7 @@ import {
 import EmployeeDashboardScreen from '../screens/employee/EmployeeDashboardScreen';
 
 import AllTask from '../screens/employee/AllTask';
-
+import EODList from '../screens/employee/EODList';
 import { getUser } from '../services/authStorage';
 
 /**
@@ -42,22 +42,6 @@ import { getUser } from '../services/authStorage';
  */
 const Drawer = createDrawerNavigator();
 
-/**
- * Temporary EOD screen.
- */
-const EODScreen = () => {
-  return (
-    <View style={styles.placeholderContainer}>
-      <Text style={styles.placeholderTitle}>
-        EOD
-      </Text>
-
-      <Text style={styles.placeholderText}>
-        EOD screen coming next.
-      </Text>
-    </View>
-  );
-};
 
 /**
  * Custom Drawer Content.
@@ -317,14 +301,13 @@ const EmployeeDrawerNavigator = () => {
         }}
       />
 
-      {/* EOD */}
       <Drawer.Screen
-        name="EOD"
-        component={EODScreen}
-        options={{
-          title: 'EOD List',
-        }}
-      />
+  name="EOD"
+  component={EODList}
+  options={{
+    title: 'EOD List',
+  }}
+/>
 
     </Drawer.Navigator>
   );
@@ -514,25 +497,7 @@ const styles = StyleSheet.create({
     color: '#FCA5A5',
   },
 
-  placeholderContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: '#EEF4F8',
-  },
-
-  placeholderTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-  },
-
-  placeholderText: {
-    marginTop: 8,
-    fontSize: 15,
-    color: '#64748B',
-  },
+ 
 });
 
 export default EmployeeDrawerNavigator;

@@ -1,18 +1,13 @@
 /**
  * TMSshj - Task Service
  *
- * Employee tasks se related API calls.
+ * Tasks aur task progress se related API calls.
  */
 
-import { apiGet, apiPost } from './apiClient';
+import {apiGet, apiPost} from './apiClient';
 
 /**
- * Get Tasks
- *
- * Endpoint:
- * GET /api/v1/index.php?module=tasks&action=list&page=1&limit=20
- *
- * Bearer token required hai.
+ * Get paginated tasks.
  */
 const getTasks = async (
     token,
@@ -26,32 +21,33 @@ const getTasks = async (
 
     const endpoint =
         `/api/v1/index.php?module=tasks&action=list` +
-        `&page=${page}` +
-        `&limit=${limit}` +
-        searchParameter;
+        `&page=${page}&limit=${limit}${searchParameter}`;
 
     return apiGet(endpoint, token);
 };
 
 /**
- * Create Task
+ * Get single task details.
  *
- * Confirmed Postman endpoint:
- *
- * POST /api/v1/index.php?module=tasks&action=save
- *
- * body:
- * {
- *   task,
- *   description,
- *   employee_id,
- *   page_id,
- *   due_date,
- *   status,
- *   assigned_by
- * }
+ * Confirmed endpoint:
+ * GET /api/v1/index.php?module=tasks&action=get&id=1
  */
-const createTask = async (
+const getTask = async (token, taskId) => {
+    const endpoint =
+        `/api/v1/index.php?module=tasks&action=get&id=${encodeURIComponent(
+            taskId,
+        )}`;
+
+    return apiGet(endpoint, token);
+};
+
+/**
+ * Create / update task.
+ *
+ * Confirmed endpoint:
+ * POST /api/v1/index.php?module=tasks&action=save
+ */
+const createTask = (
     token,
     taskData,
 ) => {
@@ -62,7 +58,53 @@ const createTask = async (
     );
 };
 
+/**
+ * Get progress list for one task.
+ *
+ * Confirmed endpoint:
+ * GET /api/v1/index.php?module=progress&action=list
+ *     &task_id=1&type=task
+ */
+const getTaskProgress = async (
+    token,
+    taskId,
+) => {
+    const endpoint =
+        `/api/v1/index.php?module=progress&action=list` +
+        `&task_id=${encodeURIComponent(taskId)}` +
+        `&type=task`;
+
+    return apiGet(endpoint, token);
+};
+
+/**
+ * Save a new progress entry.
+ *
+ * Confirmed endpoint:
+ * POST /api/v1/index.php?module=progress&action=save
+ *
+ * Body:
+ * {
+ *   task_id: 1,
+ *   progress: "Work update from app",
+ *   status: 0
+ * }
+ */
+const saveTaskProgress = (
+    token,
+    progressData,
+) => {
+    return apiPost(
+        '/api/v1/index.php?module=progress&action=save',
+        progressData,
+        token,
+    );
+};
+
 export {
     getTasks,
+    getTask,
     createTask,
+    getTaskProgress,
+    saveTaskProgress,
 };

@@ -11,12 +11,23 @@
  * 5. All / Assigned To Me / Assigned By Me
  * 6. Responsive task table
  * 7. Server-side pagination
+ * 8. Conditional Action menu
+ * 9. View Task details
+ * 10. Add Progress popup
+ * 11. View Progress popup
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+    useEffect,
+    useMemo,
+    useState,
+} from 'react';
 
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -30,12 +41,24 @@ import {
     getUser,
 } from '../../services/authStorage';
 
-import { getTasks } from '../../services/taskService';
+import {
+    getTasks,
+    getTask,
+    getTaskProgress,
+    saveTaskProgress,
+} from '../../services/taskService';
+
+import CreateTaskModal from '../../components/CreateTaskModal';
 
 /**
  * Page size options.
  */
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const PAGE_SIZE_OPTIONS = [
+    10,
+    25,
+    50,
+    100,
+];
 
 /**
  * Task filter options.
@@ -68,22 +91,26 @@ const AllTask = () => {
     /**
      * API loading.
      */
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] =
+        useState(true);
 
     /**
      * API error.
      */
-    const [errorMessage, setErrorMessage] = useState('');
+    const [errorMessage, setErrorMessage] =
+        useState('');
 
     /**
      * Current page.
      */
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] =
+        useState(1);
 
     /**
      * Selected page size.
      */
-    const [pageSize, setPageSize] = useState(10);
+    const [pageSize, setPageSize] =
+        useState(10);
 
     /**
      * Page size dropdown.
@@ -94,24 +121,144 @@ const AllTask = () => {
     /**
      * API total.
      */
-    const [totalTasks, setTotalTasks] = useState(0);
+    const [totalTasks, setTotalTasks] =
+        useState(0);
 
     /**
      * Search text.
      */
-    const [searchText, setSearchText] = useState('');
+    const [searchText, setSearchText] =
+        useState('');
 
     /**
      * Search value actually sent to API.
      */
-    const [activeSearch, setActiveSearch] = useState('');
+    const [activeSearch, setActiveSearch] =
+        useState('');
 
     /**
      * Current task filter.
      */
-    const [taskFilter, setTaskFilter] = useState(
-        TASK_FILTERS.ALL,
-    );
+    const [taskFilter, setTaskFilter] =
+        useState(TASK_FILTERS.ALL);
+
+    /**
+     * Create task modal.
+     */
+    const [
+        showCreateTaskModal,
+        setShowCreateTaskModal,
+    ] = useState(false);
+
+    /**
+     * Selected task for Action menu.
+     */
+    const [selectedTask, setSelectedTask] =
+        useState(null);
+
+    /**
+     * Action menu modal.
+     */
+    const [
+        showActionModal,
+        setShowActionModal,
+    ] = useState(false);
+
+    /**
+     * Task detail modal.
+     */
+    const [
+        showTaskDetailModal,
+        setShowTaskDetailModal,
+    ] = useState(false);
+
+    /**
+     * Task details returned by API.
+     */
+    const [
+        taskDetail,
+        setTaskDetail,
+    ] = useState(null);
+
+    /**
+     * Task details loading.
+     */
+    const [
+        isTaskDetailLoading,
+        setIsTaskDetailLoading,
+    ] = useState(false);
+
+    /**
+     * Task details error.
+     */
+    const [
+        taskDetailError,
+        setTaskDetailError,
+    ] = useState('');
+
+    /**
+     * Add Progress modal.
+     */
+    const [
+        showAddProgressModal,
+        setShowAddProgressModal,
+    ] = useState(false);
+
+    /**
+     * Progress text.
+     */
+    const [
+        progressText,
+        setProgressText,
+    ] = useState('');
+
+    /**
+     * Save progress loading.
+     */
+    const [
+        isSavingProgress,
+        setIsSavingProgress,
+    ] = useState(false);
+
+    /**
+     * Add progress error.
+     */
+    const [
+        progressError,
+        setProgressError,
+    ] = useState('');
+
+    /**
+     * View Progress modal.
+     */
+    const [
+        showProgressModal,
+        setShowProgressModal,
+    ] = useState(false);
+
+    /**
+     * Progress list.
+     */
+    const [
+        progressItems,
+        setProgressItems,
+    ] = useState([]);
+
+    /**
+     * Progress loading.
+     */
+    const [
+        isProgressLoading,
+        setIsProgressLoading,
+    ] = useState(false);
+
+    /**
+     * Progress error.
+     */
+    const [
+        progressListError,
+        setProgressListError,
+    ] = useState('');
 
     /**
      * Get tasks.
@@ -133,11 +280,20 @@ const AllTask = () => {
                 search,
             );
 
+            if (!response?.ok) {
+                throw new Error(
+                    response?.error?.message ||
+                    'Unable to load tasks.',
+                );
+            }
+
             const items =
                 response?.data?.items || [];
 
             const total =
-                Number(response?.data?.total || 0);
+                Number(
+                    response?.data?.total || 0,
+                );
 
             setTasks(items);
             setTotalTasks(total);
@@ -170,8 +326,11 @@ const AllTask = () => {
     useEffect(() => {
         const initialize = async () => {
             try {
-                const authToken = await getToken();
-                const storedUser = await getUser();
+                const authToken =
+                    await getToken();
+
+                const storedUser =
+                    await getUser();
 
                 if (!authToken) {
                     setErrorMessage(
@@ -209,12 +368,27 @@ const AllTask = () => {
     }, []);
 
     /**
+     * Refresh task list after new task.
+     */
+    const handleTaskCreated = async () => {
+        setCurrentPage(1);
+
+        if (token) {
+            await loadTasks(
+                token,
+                1,
+                pageSize,
+                activeSearch,
+            );
+        }
+    };
+
+    /**
      * Search.
-     *
-     * API request search ke saath jayegi.
      */
     const handleSearch = async () => {
-        const cleanSearch = searchText.trim();
+        const cleanSearch =
+            searchText.trim();
 
         setActiveSearch(cleanSearch);
         setCurrentPage(1);
@@ -232,81 +406,89 @@ const AllTask = () => {
     /**
      * Page size change.
      */
-    const handlePageSizeChange = async size => {
-        setShowPageSizeMenu(false);
-        setPageSize(size);
-        setCurrentPage(1);
+    const handlePageSizeChange =
+        async size => {
+            setShowPageSizeMenu(false);
+            setPageSize(size);
+            setCurrentPage(1);
 
-        if (token) {
-            await loadTasks(
-                token,
-                1,
-                size,
-                activeSearch,
-            );
-        }
-    };
+            if (token) {
+                await loadTasks(
+                    token,
+                    1,
+                    size,
+                    activeSearch,
+                );
+            }
+        };
 
     /**
      * Previous page.
      */
-    const handlePreviousPage = async () => {
-        if (currentPage <= 1 || isLoading) {
-            return;
-        }
+    const handlePreviousPage =
+        async () => {
+            if (
+                currentPage <= 1 ||
+                isLoading
+            ) {
+                return;
+            }
 
-        const previousPage =
-            currentPage - 1;
+            const previousPage =
+                currentPage - 1;
 
-        setCurrentPage(previousPage);
+            setCurrentPage(previousPage);
 
-        if (token) {
-            await loadTasks(
-                token,
-                previousPage,
-                pageSize,
-                activeSearch,
-            );
-        }
-    };
+            if (token) {
+                await loadTasks(
+                    token,
+                    previousPage,
+                    pageSize,
+                    activeSearch,
+                );
+            }
+        };
 
     /**
      * Total pages.
      */
     const totalPages = Math.max(
         1,
-        Math.ceil(totalTasks / pageSize),
+        Math.ceil(
+            totalTasks / pageSize,
+        ),
     );
 
     /**
      * Next page.
      */
-    const handleNextPage = async () => {
-        if (
-            currentPage >= totalPages ||
-            isLoading
-        ) {
-            return;
-        }
+    const handleNextPage =
+        async () => {
+            if (
+                currentPage >= totalPages ||
+                isLoading
+            ) {
+                return;
+            }
 
-        const nextPage =
-            currentPage + 1;
+            const nextPage =
+                currentPage + 1;
 
-        setCurrentPage(nextPage);
+            setCurrentPage(nextPage);
 
-        if (token) {
-            await loadTasks(
-                token,
-                nextPage,
-                pageSize,
-                activeSearch,
-            );
-        }
-    };
+            if (token) {
+                await loadTasks(
+                    token,
+                    nextPage,
+                    pageSize,
+                    activeSearch,
+                );
+            }
+        };
 
     /**
-     * Check whether task is assigned to
-     * current employee.
+     * Check whether task is assigned
+     * to current employee.
      */
     const isAssignedToMe = task => {
         const currentUserId =
@@ -329,8 +511,8 @@ const AllTask = () => {
     };
 
     /**
-     * Check whether task was assigned by
-     * current employee.
+     * Check whether task was assigned
+     * by current employee.
      */
     const isAssignedByMe = task => {
         const currentUserId =
@@ -341,25 +523,32 @@ const AllTask = () => {
         }
 
         return (
-            String(task?.assigned_by || '') ===
-            currentUserId
+            String(
+                task?.assigned_by || '',
+            ) === currentUserId
         );
     };
 
     /**
-     * Filter tasks.
-     *
-     * Backend se jo actual tasks aaye hain,
-     * unhi ko category ke according filter
-     * kar rahe hain.
+     * Visible tasks.
      */
     const visibleTasks = useMemo(() => {
-        if (taskFilter === TASK_FILTERS.ASSIGNED_TO_ME) {
-            return tasks.filter(isAssignedToMe);
+        if (
+            taskFilter ===
+            TASK_FILTERS.ASSIGNED_TO_ME
+        ) {
+            return tasks.filter(
+                isAssignedToMe,
+            );
         }
 
-        if (taskFilter === TASK_FILTERS.ASSIGNED_BY_ME) {
-            return tasks.filter(isAssignedByMe);
+        if (
+            taskFilter ===
+            TASK_FILTERS.ASSIGNED_BY_ME
+        ) {
+            return tasks.filter(
+                isAssignedByMe,
+            );
         }
 
         return tasks;
@@ -370,13 +559,7 @@ const AllTask = () => {
     ]);
 
     /**
-     * Format date.
-     *
-     * Backend date:
-     * YYYY-MM-DD
-     *
-     * UI:
-     * Sep 11, 2026
+     * Format due date.
      */
     const formatDueDate = date => {
         if (!date) {
@@ -386,7 +569,11 @@ const AllTask = () => {
         const parsedDate =
             new Date(`${date}T00:00:00`);
 
-        if (Number.isNaN(parsedDate.getTime())) {
+        if (
+            Number.isNaN(
+                parsedDate.getTime(),
+            )
+        ) {
             return date;
         }
 
@@ -413,9 +600,6 @@ const AllTask = () => {
 
     /**
      * Active tasks.
-     *
-     * Actual API data se pending/on-progress
-     * tasks filter kar rahe hain.
      */
     const activeTasks = useMemo(() => {
         return tasks.filter(task => {
@@ -439,101 +623,681 @@ const AllTask = () => {
             String(status || '')
                 .toLowerCase();
 
-        if (cleanStatus === 'completed') {
+        if (
+            cleanStatus ===
+            'completed'
+        ) {
             return styles.completedBadge;
         }
 
-        if (cleanStatus === 'on-progress') {
+        if (
+            cleanStatus ===
+            'on-progress'
+        ) {
             return styles.progressBadge;
+        }
+
+        if (
+            cleanStatus.includes('over')
+        ) {
+            return styles.overdueBadge;
         }
 
         return styles.pendingBadge;
     };
 
+    /**
+     * Normalize task status.
+     */
+    const normalizeStatus = status => {
+        return String(status || '')
+            .trim()
+            .toLowerCase()
+            .replace(/_/g, '-');
+    };
+
+    /**
+     * Get Action options according to
+     * task status.
+     *
+     * Completed:
+     * - View Task
+     * - View Progress
+     *
+     * Other statuses:
+     * - View Task
+     * - Add Progress
+     * - View Progress
+     */
+    const getTaskActionOptions = task => {
+        const status =
+            normalizeStatus(
+                task?.status_label,
+            );
+
+        if (
+            status === 'completed'
+        ) {
+            return [
+                'View Task',
+                'View Progress',
+            ];
+        }
+
+        return [
+            'View Task',
+            'Add Progress',
+            'View Progress',
+        ];
+    };
+
+   /**
+ * Action dropdown open / close.
+ */
+const handleActionPress = task => {
+    const sameTask =
+        selectedTask?.id === task?.id;
+
+    setSelectedTask(task);
+
+    /**
+     * Same task par dobara press ho to
+     * dropdown close ho jayega.
+     */
+    setShowActionModal(
+        sameTask
+            ? previous => !previous
+            : true,
+    );
+};
+
+    /**
+     * View Task.
+     */
+    const handleViewTask = async task => {
+        setSelectedTask(task);
+        setShowActionModal(false);
+
+        /**
+         * Initially list data show karte hain
+         * taake popup empty na ho.
+         */
+        setTaskDetail(task);
+        setTaskDetailError('');
+        setShowTaskDetailModal(true);
+        setIsTaskDetailLoading(true);
+
+        try {
+            if (!token) {
+                throw new Error(
+                    'Authentication token not found.',
+                );
+            }
+
+            const response =
+                await getTask(
+                    token,
+                    task?.id,
+                );
+
+            if (!response?.ok) {
+                throw new Error(
+                    response?.error?.message ||
+                    'Unable to load task details.',
+                );
+            }
+
+            /**
+             * API ka real detail data.
+             */
+            const detail =
+                response?.data || task;
+
+            setTaskDetail(detail);
+
+            console.log(
+                'Task Details API Response:',
+                response,
+            );
+        } catch (error) {
+            console.error(
+                'Task Details API Error:',
+                error,
+            );
+
+            if (error instanceof Error) {
+                setTaskDetailError(
+                    error.message,
+                );
+            } else {
+                setTaskDetailError(
+                    'Unable to load task details.',
+                );
+            }
+        } finally {
+            setIsTaskDetailLoading(false);
+        }
+    };
+
+    /**
+     * Open Add Progress popup.
+     */
+    const handleAddProgress = task => {
+        setSelectedTask(task);
+        setShowActionModal(false);
+
+        setProgressText('');
+        setProgressError('');
+
+        setShowAddProgressModal(true);
+    };
+
+    /**
+ * Load progress for selected task.
+ */
+const loadTaskProgress = async taskId => {
+    if (!token || !taskId) {
+        return;
+    }
+
+    try {
+        setIsProgressLoading(true);
+        setProgressListError('');
+
+        const response =
+            await getTaskProgress(
+                token,
+                taskId,
+            );
+
+        if (!response?.ok) {
+            throw new Error(
+                response?.error?.message ||
+                'Unable to load progress.',
+            );
+        }
+
+        /**
+         * Confirmed API response:
+         *
+         * {
+         *   ok: true,
+         *   data: {
+         *      items: [...]
+         *   }
+         * }
+         */
+        const items = Array.isArray(
+            response?.data?.items,
+        )
+            ? response.data.items
+            : [];
+
+        setProgressItems(items);
+
+        console.log(
+            'Task Progress API Response:',
+            JSON.stringify(
+                response,
+                null,
+                2,
+            ),
+        );
+    } catch (error) {
+        console.error(
+            'Task Progress API Error:',
+            error,
+        );
+
+        setProgressItems([]);
+
+        if (error instanceof Error) {
+            setProgressListError(
+                error.message,
+            );
+        } else {
+            setProgressListError(
+                'Unable to load progress.',
+            );
+        }
+    } finally {
+        setIsProgressLoading(false);
+    }
+};
+    /**
+     * Save Progress.
+     */
+    const handleSaveProgress = async () => {
+        const cleanProgress =
+            progressText.trim();
+
+        setProgressError('');
+
+        if (!cleanProgress) {
+            setProgressError(
+                'Please enter progress.',
+            );
+            return;
+        }
+
+        if (!token) {
+            setProgressError(
+                'Authentication token not found.',
+            );
+            return;
+        }
+
+        if (!selectedTask?.id) {
+            setProgressError(
+                'Task ID not found.',
+            );
+            return;
+        }
+
+        try {
+            setIsSavingProgress(true);
+
+            /**
+             * Confirmed Postman body:
+             *
+             * task_id
+             * progress
+             * status
+             */
+            const response =
+                await saveTaskProgress(
+                    token,
+                    {
+                        task_id:
+                            Number(
+                                selectedTask.id,
+                            ) ||
+                            selectedTask.id,
+
+                        progress:
+                            cleanProgress,
+
+                        status: 0,
+                    },
+                );
+
+            if (!response?.ok) {
+                throw new Error(
+                    response?.error?.message ||
+                    'Unable to save progress.',
+                );
+            }
+
+            console.log(
+                'Save Progress API Response:',
+                response,
+            );
+
+            /**
+             * Text clear.
+             */
+            setProgressText('');
+
+            /**
+             * Popup close.
+             */
+            setShowAddProgressModal(false);
+
+            /**
+             * Saved progress ko fresh
+             * server response se load kar
+             * lete hain.
+             */
+            await loadTaskProgress(
+                selectedTask.id,
+            );
+        } catch (error) {
+            console.error(
+                'Save Progress API Error:',
+                error,
+            );
+
+            if (error instanceof Error) {
+                setProgressError(
+                    error.message,
+                );
+            } else {
+                setProgressError(
+                    'Unable to save progress.',
+                );
+            }
+        } finally {
+            setIsSavingProgress(false);
+        }
+    };
+
+    /**
+     * View Progress.
+     */
+    const handleViewProgress = async task => {
+        setSelectedTask(task);
+        setShowActionModal(false);
+
+        setProgressItems([]);
+        setProgressListError('');
+        setShowProgressModal(true);
+
+        await loadTaskProgress(
+            task?.id,
+        );
+    };
+
+    /**
+     * Close task details.
+     */
+    const closeTaskDetails = () => {
+        setShowTaskDetailModal(false);
+        setTaskDetailError('');
+    };
+
+    /**
+     * Close Add Progress.
+     */
+    const closeAddProgress = () => {
+        if (isSavingProgress) {
+            return;
+        }
+
+        setShowAddProgressModal(false);
+        setProgressText('');
+        setProgressError('');
+    };
+
+    /**
+     * Close View Progress.
+     */
+    const closeProgressModal = () => {
+        if (isProgressLoading) {
+            return;
+        }
+
+        setShowProgressModal(false);
+        setProgressListError('');
+    };
+
+    /**
+     * Convert API key to readable label.
+     */
+    const formatLabel = key => {
+        return String(key || '')
+            .replace(/_/g, ' ')
+            .replace(/-/g, ' ')
+            .replace(
+                /\b\w/g,
+                character =>
+                    character.toUpperCase(),
+            );
+    };
+
+    /**
+     * Convert any detail value into text.
+     */
+    const formatDetailValue = value => {
+        if (
+            value === null ||
+            value === undefined ||
+            value === ''
+        ) {
+            return '-';
+        }
+
+        if (
+            typeof value === 'object'
+        ) {
+            try {
+                return JSON.stringify(
+                    value,
+                    null,
+                    2,
+                );
+            } catch {
+                return String(value);
+            }
+        }
+
+        return String(value);
+    };
+
+    /**
+     * Render task detail fields.
+     *
+     * API object ke real fields ko
+     * dynamically show karta hai.
+     */
+    const renderTaskDetails = () => {
+        if (!taskDetail) {
+            return (
+                <Text
+                    style={
+                        styles.emptyModalText
+                    }>
+                    No task details available.
+                </Text>
+            );
+        }
+
+        const entries =
+            Object.entries(taskDetail);
+
+        if (!entries.length) {
+            return (
+                <Text
+                    style={
+                        styles.emptyModalText
+                    }>
+                    No task details available.
+                </Text>
+            );
+        }
+
+        return entries.map(
+            ([key, value]) => (
+                <View
+                    key={key}
+                    style={styles.detailRow}>
+
+                    <Text
+                        style={
+                            styles.detailLabel
+                        }>
+                        {formatLabel(key)}
+                    </Text>
+
+                    <Text
+                        style={
+                            styles.detailValue
+                        }>
+                        {formatDetailValue(
+                            value,
+                        )}
+                    </Text>
+
+                </View>
+            ),
+        );
+    };
+
+   /**
+ * Progress text ko readable plain text mein
+ * convert karta hai.
+ *
+ * API progress HTML encoded form mein
+ * aa rahi hai:
+ *
+ * &lt;p&gt;updated it&lt;/p&gt;
+ *
+ * UI mein:
+ *
+ * updated it
+ */
+const getProgressText = item => {
+    if (
+        item?.progress === undefined ||
+        item?.progress === null
+    ) {
+        return '-';
+    }
+
+    const decodedText = String(item.progress)
+        // HTML encoded tags decode
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+
+        // HTML line breaks
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+
+        // Remaining HTML tags remove
+        .replace(/<[^>]*>/g, '')
+
+        // Extra spaces clean
+        .replace(/\n\s*\n/g, '\n')
+        .trim();
+
+    return decodedText || '-';
+};
+
     return (
         <View style={styles.screen}>
             <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}>
+                contentContainerStyle={
+                    styles.scrollContent
+                }
+                showsVerticalScrollIndicator={
+                    false
+                }>
 
                 {/* Page Header */}
                 <View style={styles.header}>
-                    <Text style={styles.pageTitle}>
+                    <Text
+                        style={
+                            styles.pageTitle
+                        }>
                         Task List
                     </Text>
                 </View>
 
                 {/* Active Tasks Ticker */}
-                <View style={styles.activeTasksBar}>
-                    <View style={styles.activeTitleBox}>
-                        <Text style={styles.activeTitle}>
+                <View
+                    style={
+                        styles.activeTasksBar
+                    }>
+
+                    <View
+                        style={
+                            styles.activeTitleBox
+                        }>
+
+                        <Text
+                            style={
+                                styles.activeTitle
+                            }>
                             🔔 Active Tasks
                         </Text>
                     </View>
 
                     <ScrollView
                         horizontal
-                        showsHorizontalScrollIndicator={false}
+                        showsHorizontalScrollIndicator={
+                            false
+                        }
                         contentContainerStyle={
                             styles.tickerContent
                         }>
 
-                        {activeTasks.length > 0 ? (
-                            activeTasks.map(task => (
-                                <View
-                                    key={task.id}
-                                    style={styles.tickerItem}>
-
-                                    <Text
-                                        numberOfLines={1}
-                                        style={styles.tickerTask}>
-                                        {task?.task || '-'}
-                                    </Text>
-
-                                    <Text style={styles.tickerSeparator}>
-                                        •
-                                    </Text>
-
-                                    <Text
-                                        numberOfLines={1}
-                                        style={styles.tickerPerson}>
-                                        {task?.assigned_to_names || '-'}
-                                    </Text>
-
-                                    <Text style={styles.tickerSeparator}>
-                                        •
-                                    </Text>
-
-                                    <Text style={styles.tickerDate}>
-                                        {formatDueDate(
-                                            task?.due_date,
-                                        )}
-                                    </Text>
-
+                        {activeTasks.length >
+                        0 ? (
+                            activeTasks.map(
+                                task => (
                                     <View
-                                        style={[
-                                            styles.tickerStatus,
-                                            getStatusStyle(
-                                                task?.status_label,
-                                            ),
-                                        ]}>
+                                        key={
+                                            task.id
+                                        }
+                                        style={
+                                            styles.tickerItem
+                                        }>
+
+                                        <Text
+                                            numberOfLines={
+                                                1
+                                            }
+                                            style={
+                                                styles.tickerTask
+                                            }>
+                                            {task?.task ||
+                                                '-'}
+                                        </Text>
 
                                         <Text
                                             style={
-                                                styles.tickerStatusText
+                                                styles.tickerSeparator
                                             }>
-                                            {task?.status_label ||
-                                                'Unknown'}
+                                            •
                                         </Text>
+
+                                        <Text
+                                            numberOfLines={
+                                                1
+                                            }
+                                            style={
+                                                styles.tickerPerson
+                                            }>
+                                            {task?.assigned_to_names ||
+                                                '-'}
+                                        </Text>
+
+                                        <Text
+                                            style={
+                                                styles.tickerSeparator
+                                            }>
+                                            •
+                                        </Text>
+
+                                        <Text
+                                            style={
+                                                styles.tickerDate
+                                            }>
+                                            {formatDueDate(
+                                                task?.due_date,
+                                            )}
+                                        </Text>
+
+                                        <View
+                                            style={[
+                                                styles.tickerStatus,
+                                                getStatusStyle(
+                                                    task?.status_label,
+                                                ),
+                                            ]}>
+
+                                            <Text
+                                                style={
+                                                    styles.tickerStatusText
+                                                }>
+                                                {task?.status_label ||
+                                                    'Unknown'}
+                                            </Text>
+                                        </View>
                                     </View>
-                                </View>
-                            ))
+                                ),
+                            )
                         ) : (
-                            <Text style={styles.noActiveText}>
+                            <Text
+                                style={
+                                    styles.noActiveText
+                                }>
                                 No active tasks
                             </Text>
                         )}
-
                     </ScrollView>
                 </View>
 
@@ -543,28 +1307,39 @@ const AllTask = () => {
                     {/* Add New Task */}
                     <Pressable
                         onPress={() => {
-                            console.log(
-                                'Add New Task pressed',
+                            setShowCreateTaskModal(
+                                true,
                             );
                         }}
-                        style={({ pressed }) => [
+                        style={({
+                            pressed,
+                        }) => [
                             styles.addTaskButton,
                             pressed
                                 ? styles.addTaskButtonPressed
                                 : null,
                         ]}>
 
-                        <Text style={styles.addTaskText}>
+                        <Text
+                            style={
+                                styles.addTaskText
+                            }>
                             + Add New Task
                         </Text>
                     </Pressable>
 
-                    <View style={styles.divider} />
+                    <View
+                        style={
+                            styles.divider
+                        }
+                    />
 
                     {/* Task Filters */}
                     <ScrollView
                         horizontal
-                        showsHorizontalScrollIndicator={false}
+                        showsHorizontalScrollIndicator={
+                            false
+                        }
                         contentContainerStyle={
                             styles.filterScroll
                         }>
@@ -578,7 +1353,7 @@ const AllTask = () => {
                             style={[
                                 styles.filterButton,
                                 taskFilter ===
-                                    TASK_FILTERS.ALL
+                                TASK_FILTERS.ALL
                                     ? styles.filterButtonActive
                                     : null,
                             ]}>
@@ -587,7 +1362,7 @@ const AllTask = () => {
                                 style={[
                                     styles.filterText,
                                     taskFilter ===
-                                        TASK_FILTERS.ALL
+                                    TASK_FILTERS.ALL
                                         ? styles.filterTextActive
                                         : null,
                                 ]}>
@@ -604,7 +1379,7 @@ const AllTask = () => {
                             style={[
                                 styles.filterButton,
                                 taskFilter ===
-                                    TASK_FILTERS.ASSIGNED_TO_ME
+                                TASK_FILTERS.ASSIGNED_TO_ME
                                     ? styles.filterButtonActive
                                     : null,
                             ]}>
@@ -613,7 +1388,7 @@ const AllTask = () => {
                                 style={[
                                     styles.filterText,
                                     taskFilter ===
-                                        TASK_FILTERS.ASSIGNED_TO_ME
+                                    TASK_FILTERS.ASSIGNED_TO_ME
                                         ? styles.filterTextActive
                                         : null,
                                 ]}>
@@ -630,7 +1405,7 @@ const AllTask = () => {
                             style={[
                                 styles.filterButton,
                                 taskFilter ===
-                                    TASK_FILTERS.ASSIGNED_BY_ME
+                                TASK_FILTERS.ASSIGNED_BY_ME
                                     ? styles.filterButtonActive
                                     : null,
                             ]}>
@@ -639,38 +1414,54 @@ const AllTask = () => {
                                 style={[
                                     styles.filterText,
                                     taskFilter ===
-                                        TASK_FILTERS.ASSIGNED_BY_ME
+                                    TASK_FILTERS.ASSIGNED_BY_ME
                                         ? styles.filterTextActive
                                         : null,
                                 ]}>
                                 Assigned By Me
                             </Text>
                         </Pressable>
-
                     </ScrollView>
 
                     {/* Controls */}
-                    <View style={styles.controlsSection}>
+                    <View
+                        style={
+                            styles.controlsSection
+                        }>
 
                         {/* Show Entries */}
-                        <View style={styles.entriesWrapper}>
-                            <View style={styles.entriesContainer}>
+                        <View
+                            style={
+                                styles.entriesWrapper
+                            }>
 
-                                <Text style={styles.controlLabel}>
+                            <View
+                                style={
+                                    styles.entriesContainer
+                                }>
+
+                                <Text
+                                    style={
+                                        styles.controlLabel
+                                    }>
                                     Show
                                 </Text>
 
                                 <Pressable
                                     onPress={() =>
                                         setShowPageSizeMenu(
-                                            previous => !previous,
+                                            previous =>
+                                                !previous,
                                         )
                                     }
                                     style={
                                         styles.pageSizeButton
                                     }>
 
-                                    <Text style={styles.pageSizeText}>
+                                    <Text
+                                        style={
+                                            styles.pageSizeText
+                                        }>
                                         {pageSize}
                                     </Text>
 
@@ -682,18 +1473,26 @@ const AllTask = () => {
                                     </Text>
                                 </Pressable>
 
-                                <Text style={styles.controlLabel}>
+                                <Text
+                                    style={
+                                        styles.controlLabel
+                                    }>
                                     entries
                                 </Text>
-
                             </View>
 
                             {showPageSizeMenu ? (
-                                <View style={styles.pageSizeMenu}>
+                                <View
+                                    style={
+                                        styles.pageSizeMenu
+                                    }>
+
                                     {PAGE_SIZE_OPTIONS.map(
                                         option => (
                                             <Pressable
-                                                key={option}
+                                                key={
+                                                    option
+                                                }
                                                 onPress={() =>
                                                     handlePageSizeChange(
                                                         option,
@@ -701,7 +1500,8 @@ const AllTask = () => {
                                                 }
                                                 style={[
                                                     styles.pageSizeOption,
-                                                    pageSize === option
+                                                    pageSize ===
+                                                    option
                                                         ? styles.pageSizeOptionSelected
                                                         : null,
                                                 ]}>
@@ -709,13 +1509,15 @@ const AllTask = () => {
                                                 <Text
                                                     style={[
                                                         styles.pageSizeOptionText,
-                                                        pageSize === option
+                                                        pageSize ===
+                                                        option
                                                             ? styles.pageSizeOptionTextSelected
                                                             : null,
                                                     ]}>
-                                                    {option}
+                                                    {
+                                                        option
+                                                    }
                                                 </Text>
-
                                             </Pressable>
                                         ),
                                     )}
@@ -724,19 +1526,35 @@ const AllTask = () => {
                         </View>
 
                         {/* Search */}
-                        <View style={styles.searchContainer}>
+                        <View
+                            style={
+                                styles.searchContainer
+                            }>
 
-                            <Text style={styles.controlLabel}>
+                            <Text
+                                style={
+                                    styles.controlLabel
+                                }>
                                 Search
                             </Text>
 
-                            <View style={styles.searchRow}>
+                            <View
+                                style={
+                                    styles.searchRow
+                                }>
+
                                 <TextInput
-                                    value={searchText}
-                                    onChangeText={setSearchText}
+                                    value={
+                                        searchText
+                                    }
+                                    onChangeText={
+                                        setSearchText
+                                    }
                                     placeholder="Search tasks..."
                                     placeholderTextColor="#94A3B8"
-                                    style={styles.searchInput}
+                                    style={
+                                        styles.searchInput
+                                    }
                                     returnKeyType="search"
                                     onSubmitEditing={
                                         handleSearch
@@ -744,57 +1562,90 @@ const AllTask = () => {
                                 />
 
                                 <Pressable
-                                    onPress={handleSearch}
-                                    style={styles.searchButton}>
+                                    onPress={
+                                        handleSearch
+                                    }
+                                    style={
+                                        styles.searchButton
+                                    }>
 
-                                    <Text style={styles.searchButtonText}>
+                                    <Text
+                                        style={
+                                            styles.searchButtonText
+                                        }>
                                         Search
                                     </Text>
                                 </Pressable>
                             </View>
                         </View>
-
                     </View>
 
                     {/* Loading */}
                     {isLoading ? (
-                        <View style={styles.loadingBox}>
+                        <View
+                            style={
+                                styles.loadingBox
+                            }>
+
                             <ActivityIndicator
                                 size="small"
                                 color="#111827"
                             />
 
-                            <Text style={styles.loadingText}>
+                            <Text
+                                style={
+                                    styles.loadingText
+                                }>
                                 Loading tasks...
                             </Text>
                         </View>
                     ) : null}
 
                     {/* Error */}
-                    {!isLoading && errorMessage ? (
-                        <View style={styles.errorBox}>
-                            <Text style={styles.errorTitle}>
+                    {!isLoading &&
+                    errorMessage ? (
+                        <View
+                            style={
+                                styles.errorBox
+                            }>
+
+                            <Text
+                                style={
+                                    styles.errorTitle
+                                }>
                                 Unable to load tasks
                             </Text>
 
-                            <Text style={styles.errorText}>
+                            <Text
+                                style={
+                                    styles.errorText
+                                }>
                                 {errorMessage}
                             </Text>
                         </View>
                     ) : null}
 
                     {/* Task Table */}
-                    {!isLoading && !errorMessage ? (
-                        <View style={styles.tableWrapper}>
+                    {!isLoading &&
+                    !errorMessage ? (
+                        <View
+                            style={
+                                styles.tableWrapper
+                            }>
 
                             <ScrollView
                                 horizontal
-                                showsHorizontalScrollIndicator={true}>
+                                showsHorizontalScrollIndicator={
+                                    true
+                                }>
 
                                 <View>
 
                                     {/* Table Header */}
-                                    <View style={styles.tableHeader}>
+                                    <View
+                                        style={
+                                            styles.tableHeader
+                                        }>
 
                                         <Text
                                             style={[
@@ -867,21 +1718,28 @@ const AllTask = () => {
                                             ]}>
                                             ACTION
                                         </Text>
-
                                     </View>
 
                                     {/* Table Rows */}
-                                    {visibleTasks.length > 0 ? (
+                                    {visibleTasks.length >
+                                    0 ? (
                                         visibleTasks.map(
-                                            (task, index) => (
+                                            (
+                                                task,
+                                                index,
+                                            ) => (
                                                 <View
                                                     key={String(
                                                         task?.id ||
                                                         index,
                                                     )}
-                                                    style={
-                                                        styles.tableRow
-                                                    }>
+                                                   style={[
+                                                        styles.tableRow,
+                                                          selectedTask?.id === task?.id &&
+                                                           showActionModal
+                                                                ? styles.tableRowOpen
+                                                                  : null,
+                                                ]}>
 
                                                     {/* Number */}
                                                     <Text
@@ -898,13 +1756,16 @@ const AllTask = () => {
 
                                                     {/* Page Name */}
                                                     <Text
-                                                        numberOfLines={3}
+                                                        numberOfLines={
+                                                            3
+                                                        }
                                                         style={[
                                                             styles.bodyCell,
                                                             styles.pageCell,
                                                             styles.linkText,
                                                         ]}>
-                                                        {task?.pagename || '-'}
+                                                        {task?.pagename ||
+                                                            '-'}
                                                     </Text>
 
                                                     {/* Status */}
@@ -929,9 +1790,7 @@ const AllTask = () => {
                                                                 {task?.status_label ||
                                                                     '-'}
                                                             </Text>
-
                                                         </View>
-
                                                     </View>
 
                                                     {/* Task */}
@@ -942,28 +1801,36 @@ const AllTask = () => {
                                                         ]}>
 
                                                         <Text
-                                                            numberOfLines={2}
+                                                            numberOfLines={
+                                                                2
+                                                            }
                                                             style={
                                                                 styles.taskName
                                                             }>
-                                                            {task?.task || '-'}
+                                                            {task?.task ||
+                                                                '-'}
                                                         </Text>
 
                                                         {task?.description ? (
                                                             <Text
-                                                                numberOfLines={2}
+                                                                numberOfLines={
+                                                                    2
+                                                                }
                                                                 style={
                                                                     styles.description
                                                                 }>
-                                                                {task.description}
+                                                                {
+                                                                    task.description
+                                                                }
                                                             </Text>
                                                         ) : null}
-
                                                     </View>
 
                                                     {/* Due Date */}
                                                     <Text
-                                                        numberOfLines={2}
+                                                        numberOfLines={
+                                                            2
+                                                        }
                                                         style={[
                                                             styles.bodyCell,
                                                             styles.dueCell,
@@ -975,7 +1842,9 @@ const AllTask = () => {
 
                                                     {/* Assigned To */}
                                                     <Text
-                                                        numberOfLines={3}
+                                                        numberOfLines={
+                                                            3
+                                                        }
                                                         style={[
                                                             styles.bodyCell,
                                                             styles.assignedCell,
@@ -986,7 +1855,9 @@ const AllTask = () => {
 
                                                     {/* Assigned By */}
                                                     <Text
-                                                        numberOfLines={3}
+                                                        numberOfLines={
+                                                            3
+                                                        }
                                                         style={[
                                                             styles.bodyCell,
                                                             styles.assignedByCell,
@@ -997,7 +1868,9 @@ const AllTask = () => {
 
                                                     {/* Created At */}
                                                     <Text
-                                                        numberOfLines={3}
+                                                        numberOfLines={
+                                                            3
+                                                        }
                                                         style={[
                                                             styles.bodyCell,
                                                             styles.createdCell,
@@ -1007,85 +1880,193 @@ const AllTask = () => {
                                                         )}
                                                     </Text>
 
-                                                    {/* Action */}
-                                                    <View
-                                                        style={[
-                                                            styles.bodyCellView,
-                                                            styles.actionCell,
-                                                        ]}>
+                                                   {/* Action */}
+<View
+    style={[
+        styles.bodyCellView,
+        styles.actionCell,
+        selectedTask?.id === task?.id &&
+        showActionModal
+            ? styles.actionCellOpen
+            : null,
+    ]}>
 
-                                                        <Pressable
-                                                            onPress={() =>
-                                                                console.log(
-                                                                    'Task action:',
-                                                                    task,
-                                                                )
-                                                            }
-                                                            style={
-                                                                styles.actionButton
-                                                            }>
+    <View
+        style={
+            styles.actionDropdownWrapper
+        }>
 
-                                                            <Text
-                                                                style={
-                                                                    styles.actionButtonText
-                                                                }>
-                                                                Action ▼
-                                                            </Text>
+        {/* Action Button */}
+        <Pressable
+            onPress={() =>
+                handleActionPress(
+                    task,
+                )
+            }
+            style={({pressed}) => [
+                styles.actionButton,
+                pressed
+                    ? styles.actionButtonPressed
+                    : null,
+            ]}>
 
-                                                        </Pressable>
+            <Text
+                style={
+                    styles.actionButtonText
+                }>
+                Action ▼
+            </Text>
+        </Pressable>
 
-                                                    </View>
+        {/* Dropdown */}
+        {showActionModal &&
+        selectedTask?.id === task?.id ? (
+            <View
+                style={
+                    styles.actionDropdownMenu
+                }>
 
+                {getTaskActionOptions(
+                    task,
+                ).map(option => (
+                    <Pressable
+                        key={
+                            option
+                        }
+                        onPress={() => {
+
+                            /**
+                             * Dropdown close.
+                             */
+                            setShowActionModal(
+                                false,
+                            );
+
+                            /**
+                             * Selected action.
+                             */
+                            if (
+                                option ===
+                                'View Task'
+                            ) {
+                                handleViewTask(
+                                    task,
+                                );
+                                return;
+                            }
+
+                            if (
+                                option ===
+                                'Add Progress'
+                            ) {
+                                handleAddProgress(
+                                    task,
+                                );
+                                return;
+                            }
+
+                            if (
+                                option ===
+                                'View Progress'
+                            ) {
+                                handleViewProgress(
+                                    task,
+                                );
+                            }
+                        }}
+                        style={({pressed}) => [
+                            styles.actionDropdownItem,
+                            pressed
+                                ? styles.actionDropdownItemPressed
+                                : null,
+                        ]}>
+
+                        <Text
+                            style={
+                                styles.actionDropdownText
+                            }>
+                            {option}
+                        </Text>
+
+                    </Pressable>
+                ))}
+
+            </View>
+        ) : null}
+
+    </View>
+</View>
                                                 </View>
                                             ),
                                         )
                                     ) : (
                                         <View
-                                            style={styles.emptyTable}>
-                                            <Text style={styles.emptyText}>
+                                            style={
+                                                styles.emptyTable
+                                            }>
+
+                                            <Text
+                                                style={
+                                                    styles.emptyText
+                                                }>
                                                 No tasks found.
                                             </Text>
                                         </View>
                                     )}
-
                                 </View>
                             </ScrollView>
                         </View>
                     ) : null}
 
-                    {/* Pagination Information */}
+                    {/* Pagination */}
                     {!isLoading &&
-                        !errorMessage ? (
-                        <View style={styles.paginationArea}>
+                    !errorMessage ? (
+                        <View
+                            style={
+                                styles.paginationArea
+                            }>
 
-                            <Text style={styles.paginationInfo}>
+                            <Text
+                                style={
+                                    styles.paginationInfo
+                                }>
                                 Showing{' '}
-                                {totalTasks === 0
+                                {totalTasks ===
+                                0
                                     ? 0
-                                    : (currentPage - 1) *
-                                    pageSize +
-                                    1}{' '}
+                                    : (currentPage -
+                                          1) *
+                                          pageSize +
+                                      1}{' '}
                                 to{' '}
                                 {Math.min(
-                                    currentPage * pageSize,
+                                    currentPage *
+                                        pageSize,
                                     totalTasks,
                                 )}{' '}
-                                of {totalTasks} entries
+                                of{' '}
+                                {totalTasks}{' '}
+                                entries
                             </Text>
 
-                            <View style={styles.paginationControls}>
+                            <View
+                                style={
+                                    styles.paginationControls
+                                }>
 
                                 <Pressable
                                     onPress={
                                         handlePreviousPage
                                     }
                                     disabled={
-                                        currentPage === 1 ||
+                                        currentPage ===
+                                            1 ||
                                         isLoading
                                     }
                                     style={[
                                         styles.paginationButton,
-                                        currentPage === 1
+                                        currentPage ===
+                                            1
                                             ? styles.paginationDisabled
                                             : null,
                                     ]}>
@@ -1096,26 +2077,30 @@ const AllTask = () => {
                                         }>
                                         Previous
                                     </Text>
-
                                 </Pressable>
 
                                 <View
                                     style={
                                         styles.currentPageButton
                                     }>
+
                                     <Text
                                         style={
                                             styles.currentPageText
                                         }>
-                                        {currentPage}
+                                        {
+                                            currentPage
+                                        }
                                     </Text>
                                 </View>
 
                                 <Pressable
-                                    onPress={handleNextPage}
+                                    onPress={
+                                        handleNextPage
+                                    }
                                     disabled={
                                         currentPage >=
-                                        totalPages ||
+                                            totalPages ||
                                         isLoading
                                     }
                                     style={[
@@ -1132,16 +2117,570 @@ const AllTask = () => {
                                         }>
                                         Next
                                     </Text>
-
                                 </Pressable>
-
                             </View>
-
                         </View>
                     ) : null}
-
                 </View>
             </ScrollView>
+
+            {/* Create Task Modal */}
+            <CreateTaskModal
+                visible={
+                    showCreateTaskModal
+                }
+                onClose={() => {
+                    setShowCreateTaskModal(
+                        false,
+                    );
+                }}
+                onTaskCreated={
+                    handleTaskCreated
+                }
+            />
+
+
+            {/* ================================================== */}
+            {/* VIEW TASK MODAL */}
+            {/* ================================================== */}
+
+            <Modal
+                visible={
+                    showTaskDetailModal
+                }
+                transparent
+                animationType="slide"
+                onRequestClose={
+                    closeTaskDetails
+                }>
+
+                <View
+                    style={
+                        styles.modalOverlay
+                    }>
+
+                    <View
+                        style={
+                            styles.detailModalCard
+                        }>
+
+                        <View
+                            style={
+                                styles.modalHeader
+                            }>
+
+                            <View
+                                style={
+                                    styles.modalHeaderTextBox
+                                }>
+
+                                <Text
+                                    style={
+                                        styles.modalTitle
+                                    }>
+                                    Task Details
+                                </Text>
+
+                                <Text
+                                    numberOfLines={
+                                        1
+                                    }
+                                    style={
+                                        styles.modalSubtitle
+                                    }>
+                                    {selectedTask?.task ||
+                                        'Task'}
+                                </Text>
+                            </View>
+
+                            <Pressable
+                                onPress={
+                                    closeTaskDetails
+                                }
+                                style={
+                                    styles.closeButton
+                                }>
+
+                                <Text
+                                    style={
+                                        styles.closeButtonText
+                                    }>
+                                    ×
+                                </Text>
+                            </Pressable>
+                        </View>
+
+                        {isTaskDetailLoading ? (
+                            <View
+                                style={
+                                    styles.modalLoading
+                                }>
+
+                                <ActivityIndicator
+                                    size="small"
+                                    color="#0F9D9A"
+                                />
+
+                                <Text
+                                    style={
+                                        styles.modalLoadingText
+                                    }>
+                                    Loading task details...
+                                </Text>
+                            </View>
+                        ) : null}
+
+                        {taskDetailError ? (
+                            <View
+                                style={
+                                    styles.modalErrorBox
+                                }>
+
+                                <Text
+                                    style={
+                                        styles.modalErrorText
+                                    }>
+                                    {
+                                        taskDetailError
+                                    }
+                                </Text>
+                            </View>
+                        ) : null}
+
+                        <ScrollView
+                            style={
+                                styles.modalScroll
+                            }
+                            contentContainerStyle={
+                                styles.modalScrollContent
+                            }
+                            showsVerticalScrollIndicator={
+                                false
+                            }>
+
+                            {renderTaskDetails()}
+                        </ScrollView>
+
+                        <Pressable
+                            onPress={
+                                closeTaskDetails
+                            }
+                            style={
+                                styles.modalCloseButton
+                            }>
+
+                            <Text
+                                style={
+                                    styles.modalCloseButtonText
+                                }>
+                                Close
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ================================================== */}
+            {/* ADD PROGRESS MODAL */}
+            {/* ================================================== */}
+
+            <Modal
+                visible={
+                    showAddProgressModal
+                }
+                transparent
+                animationType="slide"
+                onRequestClose={
+                    closeAddProgress
+                }>
+
+                <View
+                    style={
+                        styles.modalOverlay
+                    }>
+
+                    <KeyboardAvoidingView
+                        behavior={
+                            Platform.OS ===
+                            'ios'
+                                ? 'padding'
+                                : 'height'
+                        }
+                        style={
+                            styles.keyboardContainer
+                        }>
+
+                        <View
+                            style={
+                                styles.progressModalCard
+                            }>
+
+                            <View
+                                style={
+                                    styles.modalHeader
+                                }>
+
+                                <View
+                                    style={
+                                        styles.modalHeaderTextBox
+                                    }>
+
+                                    <Text
+                                        style={
+                                            styles.modalTitle
+                                        }>
+                                        Add Progress
+                                    </Text>
+
+                                    <Text
+                                        numberOfLines={
+                                            1
+                                        }
+                                        style={
+                                            styles.modalSubtitle
+                                        }>
+                                        {selectedTask?.task ||
+                                            'Selected task'}
+                                    </Text>
+                                </View>
+
+                                <Pressable
+                                    onPress={
+                                        closeAddProgress
+                                    }
+                                    disabled={
+                                        isSavingProgress
+                                    }
+                                    style={
+                                        styles.closeButton
+                                    }>
+
+                                    <Text
+                                        style={
+                                            styles.closeButtonText
+                                        }>
+                                        ×
+                                    </Text>
+                                </Pressable>
+                            </View>
+
+                            <Text
+                                style={
+                                    styles.inputLabel
+                                }>
+                                Progress
+                            </Text>
+
+                            <TextInput
+                                value={
+                                    progressText
+                                }
+                                onChangeText={
+                                    setProgressText
+                                }
+                                placeholder="Enter your progress..."
+                                placeholderTextColor="#94A3B8"
+                                multiline
+                                textAlignVertical="top"
+                                style={
+                                    styles.progressInput
+                                }
+                                editable={
+                                    !isSavingProgress
+                                }
+                            />
+
+                            {progressError ? (
+                                <Text
+                                    style={
+                                        styles.formErrorText
+                                    }>
+                                    {
+                                        progressError
+                                    }
+                                </Text>
+                            ) : null}
+
+                            <View
+                                style={
+                                    styles.modalButtonRow
+                                }>
+
+                                <Pressable
+                                    onPress={
+                                        closeAddProgress
+                                    }
+                                    disabled={
+                                        isSavingProgress
+                                    }
+                                    style={[
+                                        styles.secondaryModalButton,
+                                        isSavingProgress
+                                            ? styles.disabledButton
+                                            : null,
+                                    ]}>
+
+                                    <Text
+                                        style={
+                                            styles.secondaryModalButtonText
+                                        }>
+                                        Cancel
+                                    </Text>
+                                </Pressable>
+
+                                <Pressable
+                                    onPress={
+                                        handleSaveProgress
+                                    }
+                                    disabled={
+                                        isSavingProgress
+                                    }
+                                    style={[
+                                        styles.primaryModalButton,
+                                        isSavingProgress
+                                            ? styles.disabledButton
+                                            : null,
+                                    ]}>
+
+                                    {isSavingProgress ? (
+                                        <ActivityIndicator
+                                            size="small"
+                                            color="#FFFFFF"
+                                        />
+                                    ) : (
+                                        <Text
+                                            style={
+                                                styles.primaryModalButtonText
+                                            }>
+                                            Save Progress
+                                        </Text>
+                                    )}
+                                </Pressable>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
+
+            {/* ================================================== */}
+            {/* VIEW PROGRESS MODAL */}
+            {/* ================================================== */}
+
+            <Modal
+                visible={
+                    showProgressModal
+                }
+                transparent
+                animationType="slide"
+                onRequestClose={
+                    closeProgressModal
+                }>
+
+                <View
+                    style={
+                        styles.modalOverlay
+                    }>
+
+                    <View
+                        style={
+                            styles.progressListModalCard
+                        }>
+
+                        <View
+                            style={
+                                styles.modalHeader
+                            }>
+
+                            <View
+                                style={
+                                    styles.modalHeaderTextBox
+                                }>
+
+                                <Text
+                                    style={
+                                        styles.modalTitle
+                                    }>
+                                    View Progress
+                                </Text>
+
+                                <Text
+                                    numberOfLines={
+                                        1
+                                    }
+                                    style={
+                                        styles.modalSubtitle
+                                    }>
+                                    {selectedTask?.task ||
+                                        'Selected task'}
+                                </Text>
+                            </View>
+
+                            <Pressable
+                                onPress={
+                                    closeProgressModal
+                                }
+                                style={
+                                    styles.closeButton
+                                }>
+
+                                <Text
+                                    style={
+                                        styles.closeButtonText
+                                    }>
+                                    ×
+                                </Text>
+                            </Pressable>
+                        </View>
+
+                        {isProgressLoading ? (
+                            <View
+                                style={
+                                    styles.modalLoading
+                                }>
+
+                                <ActivityIndicator
+                                    size="small"
+                                    color="#0F9D9A"
+                                />
+
+                                <Text
+                                    style={
+                                        styles.modalLoadingText
+                                    }>
+                                    Loading progress...
+                                </Text>
+                            </View>
+                        ) : null}
+
+                        {progressListError ? (
+                            <View
+                                style={
+                                    styles.modalErrorBox
+                                }>
+
+                                <Text
+                                    style={
+                                        styles.modalErrorText
+                                    }>
+                                    {
+                                        progressListError
+                                    }
+                                </Text>
+                            </View>
+                        ) : null}
+
+                        {!isProgressLoading &&
+                        !progressListError ? (
+                            <ScrollView
+                                style={
+                                    styles.modalScroll
+                                }
+                                contentContainerStyle={
+                                    styles.progressListContent
+                                }
+                                showsVerticalScrollIndicator={
+                                    false
+                                }>
+
+                                {progressItems.length >
+                                0 ? (
+                                    progressItems.map(
+                                        (
+                                            item,
+                                            index,
+                                        ) => (
+                                            <View
+                                                key={
+                                                    String(
+                                                        item?.id ||
+                                                        index,
+                                                    )
+                                                }
+                                                style={
+                                                    styles.progressCard
+                                                }>
+
+                                                <View
+                                                    style={
+                                                        styles.progressCardTop
+                                                    }>
+
+                                                    <Text
+                                                        style={
+                                                            styles.progressNumber
+                                                        }>
+                                                        Progress{' '}
+                                                        {index +
+                                                            1}
+                                                    </Text>
+
+                                                    {item?.date_created ? (
+                                                        <Text
+                                                            style={
+                                                                styles.progressDate
+                                                            }>
+                                                            {
+                                                                item.date_created
+                                                            }
+                                                        </Text>
+                                                    ) : null}
+                                                </View>
+
+                                                <Text
+                                                    style={
+                                                        styles.progressValue
+                                                    }>
+                                                    {getProgressText(
+                                                        item,
+                                                    )}
+                                                </Text>
+
+                                            </View>
+                                        ),
+                                    )
+                                ) : (
+                                    <View
+                                        style={
+                                            styles.emptyProgressBox
+                                        }>
+
+                                        <Text
+                                            style={
+                                                styles.emptyProgressTitle
+                                            }>
+                                            No progress found
+                                        </Text>
+
+                                        <Text
+                                            style={
+                                                styles.emptyProgressText
+                                            }>
+                                            No progress has been
+                                            added for this task yet.
+                                        </Text>
+                                    </View>
+                                )}
+                            </ScrollView>
+                        ) : null}
+
+                        <Pressable
+                            onPress={
+                                closeProgressModal
+                            }
+                            style={
+                                styles.modalCloseButton
+                            }>
+
+                            <Text
+                                style={
+                                    styles.modalCloseButtonText
+                                }>
+                                Close
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -1206,7 +2745,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 10,
         borderRightWidth: 1,
-        borderRightColor: 'rgba(255,255,255,0.18)',
+        borderRightColor:
+            'rgba(255,255,255,0.18)',
     },
 
     tickerTask: {
@@ -1473,7 +3013,7 @@ const styles = StyleSheet.create({
     tableWrapper: {
         width: '100%',
         marginTop: 16,
-        overflow: 'hidden',
+        overflow: 'visible',
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
@@ -1493,6 +3033,12 @@ const styles = StyleSheet.create({
         borderBottomColor: '#E2E8F0',
         backgroundColor: '#FFFFFF',
     },
+
+    tableRowOpen: {
+    position: 'relative',
+    zIndex: 1000,
+    elevation: 20,
+},
 
     headerCell: {
         minHeight: 46,
@@ -1549,7 +3095,8 @@ const styles = StyleSheet.create({
     },
 
     actionCell: {
-        width: 105,
+        width: 115,
+        overflow: 'visible',
     },
 
     linkText: {
@@ -1589,6 +3136,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#059669',
     },
 
+    overdueBadge: {
+        backgroundColor: '#DC2626',
+    },
+
     statusText: {
         fontSize: 9,
         fontWeight: '700',
@@ -1609,6 +3160,67 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#475569',
     },
+
+    actionCellOpen: {
+    zIndex: 1000,
+    elevation: 10,
+},
+
+actionDropdownWrapper: {
+    position: 'relative',
+    zIndex: 2000,
+    elevation: 20,
+},
+
+actionButtonPressed: {
+    opacity: 0.7,
+},
+
+actionDropdownMenu: {
+    position: 'absolute',
+    top: 38,
+    left: 0,
+
+    width: 145,
+
+    zIndex: 3000,
+    elevation: 25,
+
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 9,
+
+    backgroundColor: '#FFFFFF',
+
+    shadowColor: '#000000',
+    shadowOffset: {
+        width: 0,
+        height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+},
+
+actionDropdownItem: {
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+
+    backgroundColor: '#FFFFFF',
+},
+
+actionDropdownItemPressed: {
+    backgroundColor: '#F1F5F9',
+},
+
+actionDropdownText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+},
 
     emptyTable: {
         minWidth: 1100,
@@ -1635,8 +3247,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        gap: 7,
         marginTop: 12,
+        gap: 7,
     },
 
     paginationButton: {
@@ -1672,6 +3284,339 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '700',
         color: '#FFFFFF',
+    },
+
+    /* ==================================================
+       MODALS
+       ================================================== */
+
+    modalOverlay: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+        backgroundColor:
+            'rgba(15,23,42,0.55)',
+    },
+
+    actionModalCard: {
+        width: '100%',
+        maxWidth: 420,
+        padding: 16,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+    },
+
+    detailModalCard: {
+        width: '100%',
+        maxWidth: 520,
+        maxHeight: '86%',
+        padding: 16,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+    },
+
+    progressModalCard: {
+        width: '100%',
+        maxWidth: 520,
+        padding: 16,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+    },
+
+    progressListModalCard: {
+        width: '100%',
+        maxWidth: 520,
+        maxHeight: '86%',
+        padding: 16,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+    },
+
+    keyboardContainer: {
+        width: '100%',
+        alignItems: 'center',
+    },
+
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 14,
+    },
+
+    modalHeaderTextBox: {
+        flex: 1,
+        paddingRight: 10,
+    },
+
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#111827',
+    },
+
+    modalSubtitle: {
+        marginTop: 3,
+        fontSize: 11,
+        color: '#64748B',
+    },
+
+    closeButton: {
+        width: 34,
+        height: 34,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 17,
+        backgroundColor: '#F1F5F9',
+    },
+
+    closeButtonText: {
+        marginTop: -2,
+        fontSize: 25,
+        lineHeight: 27,
+        color: '#475569',
+    },
+
+    actionOptions: {
+        width: '100%',
+    },
+
+    actionOption: {
+        minHeight: 48,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 9,
+        marginTop: 8,
+        backgroundColor: '#FFFFFF',
+    },
+
+    actionOptionPressed: {
+        opacity: 0.7,
+        backgroundColor: '#F8FAFC',
+    },
+
+    actionOptionText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#334155',
+    },
+
+    actionOptionArrow: {
+        fontSize: 22,
+        color: '#0F9D9A',
+    },
+
+    modalScroll: {
+        flexGrow: 0,
+    },
+
+    modalScrollContent: {
+        paddingBottom: 8,
+    },
+
+    detailRow: {
+        width: '100%',
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+        marginBottom: 7,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 9,
+        backgroundColor: '#F8FAFC',
+    },
+
+    detailLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+
+    detailValue: {
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 19,
+        color: '#1E293B',
+    },
+
+    modalLoading: {
+        minHeight: 90,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    modalLoadingText: {
+        marginTop: 8,
+        fontSize: 12,
+        color: '#64748B',
+    },
+
+    modalErrorBox: {
+        marginBottom: 10,
+        padding: 10,
+        borderRadius: 8,
+        backgroundColor: '#FEF2F2',
+    },
+
+    modalErrorText: {
+        fontSize: 12,
+        lineHeight: 17,
+        color: '#B91C1C',
+    },
+
+    emptyModalText: {
+        paddingVertical: 30,
+        textAlign: 'center',
+        fontSize: 13,
+        color: '#64748B',
+    },
+
+    modalCloseButton: {
+        minHeight: 42,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 12,
+        borderRadius: 8,
+        backgroundColor: '#F1F5F9',
+    },
+
+    modalCloseButtonText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#475569',
+    },
+
+    inputLabel: {
+        marginBottom: 7,
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#334155',
+    },
+
+    progressInput: {
+        minHeight: 140,
+        maxHeight: 220,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        borderRadius: 9,
+        fontSize: 13,
+        lineHeight: 19,
+        color: '#111827',
+        backgroundColor: '#FFFFFF',
+    },
+
+    formErrorText: {
+        marginTop: 7,
+        fontSize: 12,
+        color: '#B91C1C',
+    },
+
+    modalButtonRow: {
+        width: '100%',
+        flexDirection: 'row',
+        marginTop: 14,
+        gap: 8,
+    },
+
+    secondaryModalButton: {
+        flex: 1,
+        minHeight: 42,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        borderRadius: 8,
+        backgroundColor: '#FFFFFF',
+    },
+
+    secondaryModalButtonText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#475569',
+    },
+
+    primaryModalButton: {
+        flex: 1.3,
+        minHeight: 42,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
+        backgroundColor: '#0F9D9A',
+    },
+
+    primaryModalButtonText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+
+    disabledButton: {
+        opacity: 0.55,
+    },
+
+    progressListContent: {
+        paddingBottom: 4,
+    },
+
+    progressCard: {
+        marginBottom: 9,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
+    },
+
+    progressCardTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+
+    progressNumber: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#0F9D9A',
+    },
+
+    progressDate: {
+        marginLeft: 8,
+        fontSize: 10,
+        color: '#64748B',
+    },
+
+    progressValue: {
+        marginTop: 8,
+        fontSize: 13,
+        lineHeight: 19,
+        color: '#1E293B',
+    },
+
+    emptyProgressBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 35,
+        paddingHorizontal: 15,
+    },
+
+    emptyProgressTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#334155',
+    },
+
+    emptyProgressText: {
+        marginTop: 5,
+        textAlign: 'center',
+        fontSize: 12,
+        lineHeight: 18,
+        color: '#64748B',
     },
 });
 

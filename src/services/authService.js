@@ -56,15 +56,27 @@ const loginEmployee = async (email, password) => {
  * 0 = Offline
  */
 const setEmployeeStatus = async (token, status) => {
-  return apiPost(
+  const response = await apiPost(
     '/api/v1/index.php?module=auth&action=status',
-    {
-      status,
-    },
+    {status},
     token,
   );
-};
 
+  // API ne request accept ki ya nahi, yahan confirm kar rahe hain.
+  if (!response?.ok) {
+    let message = 'Unable to update employee status.';
+
+    if (typeof response?.error === 'string') {
+      message = response.error;
+    } else if (response?.error?.message) {
+      message = response.error.message;
+    }
+
+    throw new Error(message);
+  }
+
+  return response;
+};
 /**
  * Current logged-in user ki information.
  *

@@ -155,6 +155,7 @@ const LoginScreen = ({ navigation }) => {
       await saveAuth(
         response.data.token,
         response.data.user,
+         rememberMe,
       );
 
       /**
@@ -226,19 +227,18 @@ const LoginScreen = ({ navigation }) => {
         style={styles.gradient}>
 
         <KeyboardAvoidingView
-          style={styles.keyboardContainer}
-          behavior={
-            Platform.OS === 'ios'
-              ? 'padding'
-              : undefined
-          }>
+  style={styles.keyboardContainer}
+  behavior={
+    Platform.OS === 'ios'
+      ? 'padding'
+      : 'height'
+  }>
 
           <ScrollView
-            contentContainerStyle={
-              styles.scrollContent
-            }
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
+  style={styles.scrollView}
+  contentContainerStyle={styles.scrollContent}
+  keyboardShouldPersistTaps="handled"
+  showsVerticalScrollIndicator={false}>
 
             <View style={styles.content}>
 
@@ -579,23 +579,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+
   keyboardContainer: {
     flex: 1,
   },
 
-  scrollContent: {
-    flexGrow: 1,
-    minHeight: '100%',
-  },
+  scrollView: {
+  flex: 1,
+},
 
-  content: {
-    flex: 1,
-    minHeight: 620,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 32,
-  },
+  scrollContent: {
+  flexGrow: 1,
+  paddingVertical: 24,
+},
+
+ content: {
+  width: '100%',
+  flexGrow: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: 16,
+  paddingVertical: 24,
+},
 
   card: {
     width: '100%',
